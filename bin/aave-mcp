@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+
+const { Command } = require("commander");
+const fs = require("fs");
+const path = require("path");
+const dotenv = require("dotenv");
+
+// Corrected dotenv config to load .env from project root
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+
+// Import from the compiled output in dist/
+// These imports might fail if dotenv didn't set up RPC URLs correctly and helpers.ts throws an error upon import due to missing defaults.
+let startMcpServer, TOOLS, helpers;
+try {
+  const mcpModule = require("../dist/index");
+  startMcpServer = mcpModule.startMcpServer;
+  TOOLS = mcpModule.TOOLS;
+  helpers = require("../dist/tools/helpers");
+} catch (e) {
+  console.error(
+    "[BIN_SCRIPT_ERROR] Failed to require necessary modules from dist/. Ensure project is built.",
+    e
+  );
+  process.exit(1);
+}
+
+const program = new Command();
+
+// Package info
+let packageJson;
+try {
+  packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../package.json"), "utf8")
+  );
+} catch (e) {
+  console.error("Error reading package.json for version info.");
+  packageJson = { version: "0.0.0" }; // Fallback version
+}
+
+program
+  .name("aave-mcp")
+  .description(
+    packageJson.description ||
+      "Aave MCP server for accessing Aave protocol data"
+  )
+  .version(packageJson.version);
+
+program
+  .command("start")
+  .description("Start the MCP server")
+  // .option('-p, --port <number>', 'Port to run HTTP server on (if not using stdin/stdout)', '8080') // We only have stdio for now
+  .option("-m, --mode <mode>", "Server mode: stdio", "stdio") // Default to stdio, only option for now
+  // .option('-c, --config <path>', 'Path to config file') // Config file not implemented yet
+  .action((options) => {
+    if (options.mode !== "stdio") {
+      console.error(`Error: Only 'stdio' mode is currently supported.`);
+      process.exit(1);
+    }
+    if (startMcpServer) {
+      startMcpServer({
+        mode: options.mode /*, port: parseInt(options.port) */,
+      });
+    } else {
+      console.error("[BIN_SCRIPT_ERROR] startMcpServer function not loaded.");
+    }
+  });
+
+program
+  .command("list-chains")
+  .description("List supported chains (based on helpers.ts AAVE_ADDRESS_BOOK)")
+  .action(() => {
+    // const { AAVE_ADDRESS_BOOK: currentChains } = require('../dist/tools/helpers'); // Direct import from compiled helper
+    const currentChains = helpers.AAVE_ADDRESS_BOOK;
+    if (Object.keys(currentChains).length === 0) {
+      console.log(
+        "Could not load chain information. Ensure src/tools/helpers.ts is compiled and exports AAVE_ADDRESS_BOOK."
+      );
+      return;
+    }
+    console.log("Supported chains (Chain ID - Inferred Name):");
+    for (const chainId in currentChains) {
+      // Attempt to infer a name if possible, or just list ID
+      let chainName = "";
+      if (currentChains[chainId] && currentChains[chainId].name) {
+        // aave-address-book objects might have a .name
+        chainName = currentChains[chainId].name;
+      } else {
+        // You could add a manual mapping here if needed
+        if (chainId === "1") chainName = "Ethereum Mainnet";
+        else if (chainId === "42161") chainName = "Arbitrum One";
+        else if (chainId === "10") chainName = "Optimism";
+        else if (chainId === "137") chainName = "Polygon Mainnet";
+        else if (chainId === "43114") chainName = "Avalanche C-Chain";
+        else if (chainId === "8453") chainName = "Base";
+      }
+      console.log(`- ${chainId}${chainName ? ` (${chainName})` : ""}`);
+    }
+  });
+
+program
+  .command("list-tools")
+  .description("List available tools in the MCP server")
+  .action(() => {
+    // TOOLS should be exported from dist/index.js
+    if (!TOOLS || Object.keys(TOOLS).length === 0) {
+      console.log(
+        "Could not load tool information. Ensure src/index.ts is compiled and exports TOOLS."
+      );
+      return;
+    }
+    console.log("Available tools:");
+    for (const toolName in TOOLS) {
+      console.log(`- ${toolName}`);
+    }
+  });
+
+program.parse(process.argv);
+
+// If no command is specified, show help (commander does this by default if no args)
+if (!process.argv.slice(2).length) {
+  // program.outputHelp(); // Already default behavior for commander > v7 if no command given
+}

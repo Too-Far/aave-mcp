@@ -1,0 +1,27 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x] # Using current LTS versions
+    steps:
+      - uses: actions/checkout@v4 # Updated to v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4 # Updated to v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci # npm ci is recommended for CI for faster, more reliable builds
+      - name: Build project
+        run: npm run build
+      - name: Run tests
+        run: npm test
