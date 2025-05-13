@@ -24,7 +24,7 @@
     "blockchain",
     "ethereum"
   ],
-  "author": "Too-Far",
+  "author": "Too-Far <rdturner40@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@aave/contract-helpers": "^1.33.1",
